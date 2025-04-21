@@ -343,7 +343,7 @@ def upload_to_firestore(articles, db):
         
         for article in batch_articles:
             # Create a document reference with an automatically generated ID
-            doc_ref = db.collection("articles").document()
+            doc_ref = db.collection("retrieved_articles").document()
             batch.set(doc_ref, article)
         
         # Batch execution

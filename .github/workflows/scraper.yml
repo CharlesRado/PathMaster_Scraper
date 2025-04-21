@@ -29,9 +29,8 @@ jobs:
         run: mkdir -p config
       
       - name: Create Firebase config
-        env:
-          FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
-        run: echo "$FIREBASE_CONFIG" > config/firebase.json
+        run: |
+          echo "${{ secrets.FIREBASE_CONFIG }}" > config/firebase.json
       
       - name: Set API keys
         run: |
@@ -43,7 +42,7 @@ jobs:
       
       - name: Upload results as artifact (if Firebase fails)
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: scraped-articles
           path: articles_scraped.json
