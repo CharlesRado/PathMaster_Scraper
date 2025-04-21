@@ -10,26 +10,46 @@ import os
 from urllib.parse import quote
 
 # -------------------------- CONFIG --------------------------
-IEEE_API_KEY = "gzsxnqj5tmr3eb92x9w46rrw"
-SERP_API_KEY = "1ac29f85d1c0b690a683e756ddfca1d8874b0c817cd1648bf1072e7d0b2d809a"
+# Replace with your real keys or leave as "votre_clé_xxx" for GitHub Actions to replace them
+IEEE_API_KEY = "63mtny26epenxwvge7qvgztk"  # IEEE Xplore API key
+SERP_API_KEY = "1ac29f85d1c0b690a683e756ddfca1d8874b0c817cd1648bf1072e7d0b2d809a"  # Will be replaced by GitHub Actions
 FIREBASE_JSON = "config/firebase.json"
 
 # -------------------------- FIREBASE INIT --------------------------
-# Function to initialize Firebase (only if file exists)
 def initialize_firebase():
+    """Initialize Firebase connection."""
+    print("🔄 Initializing Firebase...")
     if os.path.exists(FIREBASE_JSON):
-        cred = credentials.Certificate(FIREBASE_JSON)
         try:
-            firebase_admin.initialize_app(cred)
-        except ValueError:
-            # Application already initialized
-            pass
-        return firestore.client()
+            # Try to read and validate the JSON file
+            with open(FIREBASE_JSON, 'r') as file:
+                content = file.read().strip()
+                # Ensure the JSON is valid
+                try:
+                    json.loads(content)
+                    print("Firebase JSON file is valid.")
+                except json.JSONDecodeError as e:
+                    print(f"Invalid Firebase JSON file: {e}")
+                    print("JSON file content (first 100 characters):")
+                    print(content[:100] + "...")
+                    return None
+            
+            # Initialize Firebase with the file
+            cred = credentials.Certificate(FIREBASE_JSON)
+            try:
+                firebase_admin.initialize_app(cred)
+            except ValueError:
+                # Application is already initialized
+                pass
+            return firestore.client()
+        except Exception as e:
+            print(f"Error initializing Firebase: {e}")
+            return None
     else:
         print(f"Firebase JSON file not found: {FIREBASE_JSON}")
         return None
 
-# === CATEGORIES ===
+# === CATEGORIES WITH PRECISE KEYWORDS ===
 CATEGORIES = {
     "Perception & Vision": [
         "computer vision", "visual perception", "object detection", 
@@ -56,10 +76,10 @@ CATEGORIES = {
     ]
 }
 
-# Function for determining article categories
+# Function to determine article categories
 def determine_categories(title, abstract):
     """
-    Determines the categories of an article based on its title and summary.
+    Determines the categories of an article based on its title and abstract.
     Returns a list of relevant categories.
     """
     if not abstract:
@@ -70,14 +90,14 @@ def determine_categories(title, abstract):
     
     for category, keywords in CATEGORIES.items():
         for keyword in keywords:
-            # Using regexes to find whole words or phrases
+            # Use regex to find whole words or expressions
             pattern = r'\b' + re.escape(keyword.lower()) + r'\b'
             if re.search(pattern, text):
                 if category not in matched_categories:
                     matched_categories.append(category)
-                break  # If a keyword matches, go to the next category
+                break  # If a keyword matches, move to the next category
     
-    # If no category is found but “llm” and “robot” are mentione
+    # If no category is found but "llm" and "robot" are mentioned
     if not matched_categories and ("llm" in text or "large language model" in text) and ("robot" in text):
         matched_categories.append("General LLM & Robotics")
     
@@ -86,6 +106,7 @@ def determine_categories(title, abstract):
 # === ARXIV SCRAPER ===
 def scrape_arxiv():
     """Retrieves articles from arXiv using their API."""
+    print("\nRetrieving articles from arXiv...")
     all_articles = []
     
     # General query for LLM + robotics articles
@@ -95,7 +116,7 @@ def scrape_arxiv():
     try:
         res = requests.get(url)
         if res.status_code != 200:
-            print(f"arXiv API error: {res.status_code}")
+            print(f"arXiv API Error: {res.status_code}")
             return all_articles
             
         root = ET.fromstring(res.content)
@@ -112,11 +133,11 @@ def scrape_arxiv():
             link = f"https://arxiv.org/abs/{arxiv_id}"
             pdf_link = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
             
-            # Determine article categories
+            # Determine the categories of the article
             categories = determine_categories(title, abstract)
             
             if not categories:
-                continue  # Ignore articles that don't match any category
+                continue  # Skip articles that don't match any category
                 
             for category in categories:
                 all_articles.append({
@@ -129,7 +150,7 @@ def scrape_arxiv():
                     "timestamp": datetime.now().isoformat()
                 })
         
-        print(f"arXiv: {len(all_articles)} retrieved articles")
+        print(f"arXiv: {len(all_articles)} articles retrieved")
     except Exception as e:
         print(f"Error retrieving from arXiv: {e}")
     
@@ -137,11 +158,12 @@ def scrape_arxiv():
 
 # === IEEE SCRAPER ===
 def scrape_ieee():
-    """Retrieve articles from IEEE Xplore by using their API."""
+    """Retrieves articles from IEEE Xplore using their API."""
+    print("\nRetrieving articles from IEEE Xplore...")
     all_articles = []
     
-    if not IEEE_API_KEY or IEEE_API_KEY == "gzsxnqj5tmr3eb92x9w46rrw":
-        print("IEEE API key not configured")
+    if not IEEE_API_KEY or IEEE_API_KEY == "votre_clé_ieee":
+        print("IEEE API key not configured or invalid")
         return all_articles
     
     # General query for LLM + robotics articles
@@ -149,18 +171,24 @@ def scrape_ieee():
     url = f"https://ieeexploreapi.ieee.org/api/v1/search/articles?apikey={IEEE_API_KEY}&format=json&max_records=25&start_record=1&sort_order=desc&sort_field=publication_date&abstract={query}"
     
     try:
+        print(f"IEEE Query: {url}")
         res = requests.get(url)
+        print(f"IEEE Response Code: {res.status_code}")
+        
         if res.status_code != 200:
-            print(f"IEEE API error: {res.status_code}")
+            print(f"IEEE API Error: {res.status_code}")
+            print(f"Response: {res.text[:200]}...")
             return all_articles
             
         data = res.json()
+        total_records = data.get("total_records", 0)
+        print(f"Total IEEE records: {total_records}")
         
         for item in data.get("articles", []):
             title = item.get("title", "")
             abstract = item.get("abstract", "")
             
-            # Cleaning up HTML tags in titles and summaries
+            # Clean HTML tags from title and abstract
             title = re.sub(r'<[^>]+>', '', title)
             abstract = re.sub(r'<[^>]+>', '', abstract)
             
@@ -171,7 +199,7 @@ def scrape_ieee():
             categories = determine_categories(title, abstract)
             
             if not categories:
-                continue  # Ignore articles that don't match any category
+                continue  # Skip articles that don't match any category
                 
             for category in categories:
                 all_articles.append({
@@ -184,19 +212,22 @@ def scrape_ieee():
                     "timestamp": datetime.now().isoformat()
                 })
         
-        print(f"IEEE: {len(all_articles)} retrieved articles")
+        print(f"IEEE: {len(all_articles)} articles retrieved")
     except Exception as e:
         print(f"Error retrieving from IEEE: {e}")
+        import traceback
+        print(traceback.format_exc())
     
     return all_articles
 
 # === GOOGLE SCHOLAR VIA SERPAPI ===
 def scrape_google_scholar():
-    """Retrieves articles from Google Scholar via SerpAPI API."""
+    """Retrieves articles from Google Scholar via SerpAPI."""
+    print("\nRetrieving articles from Google Scholar...")
     all_articles = []
     
-    if not SERP_API_KEY or SERP_API_KEY == "1ac29f85d1c0b690a683e756ddfca1d8874b0c817cd1648bf1072e7d0b2d809a":
-        print("SerpAPI API key not configured")
+    if not SERP_API_KEY or SERP_API_KEY == "votre_clé_serp":
+        print("⚠️ SerpAPI key not configured or invalid")
         return all_articles
     
     # General query for LLM + robotics articles
@@ -204,13 +235,25 @@ def scrape_google_scholar():
     url = f"https://serpapi.com/search.json?q={query}&engine=google_scholar&api_key={SERP_API_KEY}&num=20"
     
     try:
+        print(f"SerpAPI Query: {url}")
         res = requests.get(url)
+        print(f"SerpAPI Response Code: {res.status_code}")
+        
         if res.status_code != 200:
-            print(f"SerpAPI error: {res.status_code}")
+            print(f"SerpAPI Error: {res.status_code}")
+            print(f"Response: {res.text[:200]}...")
             return all_articles
             
         data = res.json()
+        
+        # Check if the response contains results
+        if "organic_results" not in data:
+            print(f"No results in SerpAPI response")
+            print(f"Available keys: {', '.join(data.keys())}")
+            return all_articles
+            
         results = data.get("organic_results", [])
+        print(f"Number of Google Scholar results: {len(results)}")
         
         for result in results:
             title = result.get("title", "")
@@ -229,7 +272,7 @@ def scrape_google_scholar():
             categories = determine_categories(title, abstract)
             
             if not categories:
-                continue  # Ignore articles that don't match any category
+                continue  # Skip articles that don't match any category
                 
             for category in categories:
                 all_articles.append({
@@ -242,15 +285,18 @@ def scrape_google_scholar():
                     "timestamp": datetime.now().isoformat()
                 })
         
-        print(f"Google Scholar: {len(all_articles)} retrieved articles")
+        print(f"Google Scholar: {len(all_articles)} articles retrieved")
     except Exception as e:
         print(f"Error retrieving from Google Scholar: {e}")
+        import traceback
+        print(traceback.format_exc())
     
     return all_articles
 
 # === MDPI SCRAPER ===
 def scrape_mdpi():
     """Retrieves articles from MDPI using their API."""
+    print("\n🔍 Retrieving articles from MDPI...")
     all_articles = []
     
     # General query for LLM + robotics articles
@@ -258,19 +304,25 @@ def scrape_mdpi():
     url = f"https://www.mdpi.com/api/v1/search?query={query}&sort=relevance&page=1&view=abstract&limit=20"
     
     try:
+        print(f"📡 MDPI Query: {url}")
         res = requests.get(url)
+        print(f"📥 MDPI Response Code: {res.status_code}")
+        
         if res.status_code != 200:
-            print(f"MDPI API error: {res.status_code}")
+            print(f"MDPI API Error: {res.status_code}")
+            print(f"Response: {res.text[:200]}...")
             return all_articles
             
         data = res.json()
+        total_results = len(data.get("results", []))
+        print(f"📊 Number of MDPI results: {total_results}")
         
         for item in data.get("results", []):
             title = item.get("title", "")
             abstract = item.get("abstract", "")
             article_url = item.get("url", "")
             
-            # PDF URL construction
+            # Construct the PDF URL
             pdf_url = ""
             if "doi" in item:
                 doi = item.get("doi")
@@ -280,7 +332,7 @@ def scrape_mdpi():
             categories = determine_categories(title, abstract)
             
             if not categories:
-                continue  # Ignore articles that don't match any category
+                continue  # Skip articles that don't match any category
                 
             for category in categories:
                 all_articles.append({
@@ -293,22 +345,25 @@ def scrape_mdpi():
                     "timestamp": datetime.now().isoformat()
                 })
         
-        print(f"MDPI: {len(all_articles)} retrieved articles")
+        print(f"MDPI: {len(all_articles)} articles retrieved")
     except Exception as e:
         print(f"Error retrieving from MDPI: {e}")
+        import traceback
+        print(traceback.format_exc())
     
     return all_articles
 
-# === CLEANSE DATA AND AVOID DUPLICATION ===
+# === CLEAN DATA AND AVOID DUPLICATES ===
 def clean_and_deduplicate(all_articles):
     """Cleans data and removes duplicates."""
+    print("\n🧹 Cleaning and deduplicating articles...")
     
     # Identify duplicates with the same URL and category
     url_cat_map = {}
     unique_articles = []
     
     for article in all_articles:
-        # Clean and check the title and summary
+        # Clean and check title and abstract
         if not article.get("title") or not article.get("abstract"):
             continue
             
@@ -322,59 +377,78 @@ def clean_and_deduplicate(all_articles):
             url_cat_map[key] = True
             unique_articles.append(article)
     
-    print(f"{len(unique_articles)} unique articles on {len(all_articles)} in total.")
+    print(f"{len(unique_articles)} unique articles out of {len(all_articles)} total.")
     return unique_articles
 
 # === FIRESTORE UPLOAD ===
 def upload_to_firestore(articles, db):
     """Uploads articles to Firestore."""
+    print("\n📤 Uploading articles to Firestore...")
+    
     if not db:
-        print("Firestore client not initialized. Backup to local JSON file.")
+        print("Firestore client not initialized. Saving to local JSON file.")
         with open("articles_scraped.json", "w", encoding="utf-8") as f:
             json.dump(articles, f, ensure_ascii=False, indent=2)
         return
     
-    batch_size = 500  # Maximum Firestore batch size
+    batch_size = 500  # Maximum batch size for Firestore
     
-    # Divide articles into batches to avoid Firestore limits
+    # Split articles into batches to avoid Firestore limits
     for i in range(0, len(articles), batch_size):
         batch = db.batch()
         batch_articles = articles[i:i+batch_size]
         
         for article in batch_articles:
-            # Create a document reference with an automatically generated ID
+            # Create a document reference with an auto-generated ID
             doc_ref = db.collection("retrieved_articles").document()
             batch.set(doc_ref, article)
         
-        # Batch execution
+        # Execute the batch
         batch.commit()
     
-    print(f"{len(articles)} articles added to Firestore")
+    print(f"✅ {len(articles)} articles added to the retrieved_articles collection in Firestore")
 
 # === MAIN FUNCTION ===
 def main():
-    """Main function of the script."""
-    print("Start article retrieval...")
+    """Main script function."""
+    print("Starting article retrieval...")
     
     # Initialize Firebase
     db = initialize_firebase()
     
-    # Retrieve articles from various sources
+    # Retrieve articles from different sources
     arxiv_articles = scrape_arxiv()
     ieee_articles = scrape_ieee()
     scholar_articles = scrape_google_scholar()
     mdpi_articles = scrape_mdpi()
     
+    # Display statistics by source
+    print("\nSummary of articles found by source:")
+    print(f"  - arXiv: {len(arxiv_articles)} articles")
+    print(f"  - IEEE: {len(ieee_articles)} articles")
+    print(f"  - Google Scholar: {len(scholar_articles)} articles")
+    print(f"  - MDPI: {len(mdpi_articles)} articles")
+    
     # Combine all articles
     all_articles = arxiv_articles + ieee_articles + scholar_articles + mdpi_articles
     
-    # Clean and de-duplicate items
+    # Clean and deduplicate articles
     unique_articles = clean_and_deduplicate(all_articles)
     
-    # Download to Firestore or save locally
+    # Upload to Firestore or save locally
     upload_to_firestore(unique_articles, db)
     
-    print("Process successfully completed!")
+    print("\nProcess completed successfully!")
+    
+    # Display statistics by category
+    categories_count = {}
+    for article in unique_articles:
+        category = article.get("category", "Uncategorized")
+        categories_count[category] = categories_count.get(category, 0) + 1
+    
+    print("\n📊 Distribution of articles by category:")
+    for category, count in sorted(categories_count.items(), key=lambda x: x[1], reverse=True):
+        print(f"  - {category}: {count} articles")
 
 if __name__ == "__main__":
     main()
