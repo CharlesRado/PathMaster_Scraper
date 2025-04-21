@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 # -------------------------- CONFIG --------------------------
 # Replace with your real keys or leave as "votre_clé_xxx" for GitHub Actions to replace them
-IEEE_API_KEY = "63mtny26epenxwvge7qvgztk"  # IEEE Xplore API key
+IEEE_API_KEY = "qnhmjcxnwrkq9vqe72fq57vq"  # IEEE Xplore API key
 SERP_API_KEY = "1ac29f85d1c0b690a683e756ddfca1d8874b0c817cd1648bf1072e7d0b2d809a"  # Will be replaced by GitHub Actions
 FIREBASE_JSON = "config/firebase.json"
 
@@ -162,7 +162,7 @@ def scrape_ieee():
     print("\nRetrieving articles from IEEE Xplore...")
     all_articles = []
     
-    if not IEEE_API_KEY or IEEE_API_KEY == "63mtny26epenxwvge7qvgztk":
+    if not IEEE_API_KEY or IEEE_API_KEY == "qnhmjcxnwrkq9vqe72fq57vq":
         print("IEEE API key not configured or invalid")
         return all_articles
     
