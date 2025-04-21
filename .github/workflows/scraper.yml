@@ -30,12 +30,17 @@ jobs:
       
       - name: Create Firebase config
         run: |
-          echo "${{ secrets.FIREBASE_CONFIG }}" > config/firebase.json
+          cat > config/firebase.json << 'EOL'
+          ${{ secrets.FIREBASE_CONFIG }}
+          EOL
+          
+          # Check if the file is valid or no
+          python -c "import json; json.load(open('config/firebase.json'))" || echo "JSON file is invalid"
       
       - name: Set API keys
         run: |
-          sed -i "s/your_ieee_key/${{ secrets.IEEE_API_KEY }}/g" scraper.py
-          sed -i "s/your_serp_key/${{ secrets.SERP_API_KEY }}/g" scraper.py
+          sed -i "s/votre_clé_ieee/${{ secrets.IEEE_API_KEY }}/g" scraper.py
+          sed -i "s/votre_clé_serp/${{ secrets.SERP_API_KEY }}/g" scraper.py
       
       - name: Run scraper
         run: python scraper.py
