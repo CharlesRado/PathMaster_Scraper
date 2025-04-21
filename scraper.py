@@ -162,7 +162,7 @@ def scrape_ieee():
     print("\nRetrieving articles from IEEE Xplore...")
     all_articles = []
     
-    if not IEEE_API_KEY or IEEE_API_KEY == "votre_clé_ieee":
+    if not IEEE_API_KEY or IEEE_API_KEY == "63mtny26epenxwvge7qvgztk":
         print("IEEE API key not configured or invalid")
         return all_articles
     
@@ -226,7 +226,7 @@ def scrape_google_scholar():
     print("\nRetrieving articles from Google Scholar...")
     all_articles = []
     
-    if not SERP_API_KEY or SERP_API_KEY == "votre_clé_serp":
+    if not SERP_API_KEY or SERP_API_KEY == "1ac29f85d1c0b690a683e756ddfca1d8874b0c817cd1648bf1072e7d0b2d809a":
         print("⚠️ SerpAPI key not configured or invalid")
         return all_articles
     
@@ -296,7 +296,7 @@ def scrape_google_scholar():
 # === MDPI SCRAPER ===
 def scrape_mdpi():
     """Retrieves articles from MDPI using their API."""
-    print("\n🔍 Retrieving articles from MDPI...")
+    print("\nRetrieving articles from MDPI...")
     all_articles = []
     
     # General query for LLM + robotics articles
@@ -304,9 +304,9 @@ def scrape_mdpi():
     url = f"https://www.mdpi.com/api/v1/search?query={query}&sort=relevance&page=1&view=abstract&limit=20"
     
     try:
-        print(f"📡 MDPI Query: {url}")
+        print(f"MDPI Query: {url}")
         res = requests.get(url)
-        print(f"📥 MDPI Response Code: {res.status_code}")
+        print(f"MDPI Response Code: {res.status_code}")
         
         if res.status_code != 200:
             print(f"MDPI API Error: {res.status_code}")
@@ -315,7 +315,7 @@ def scrape_mdpi():
             
         data = res.json()
         total_results = len(data.get("results", []))
-        print(f"📊 Number of MDPI results: {total_results}")
+        print(f"Number of MDPI results: {total_results}")
         
         for item in data.get("results", []):
             title = item.get("title", "")
@@ -356,7 +356,7 @@ def scrape_mdpi():
 # === CLEAN DATA AND AVOID DUPLICATES ===
 def clean_and_deduplicate(all_articles):
     """Cleans data and removes duplicates."""
-    print("\n🧹 Cleaning and deduplicating articles...")
+    print("\nCleaning and deduplicating articles...")
     
     # Identify duplicates with the same URL and category
     url_cat_map = {}
@@ -383,7 +383,7 @@ def clean_and_deduplicate(all_articles):
 # === FIRESTORE UPLOAD ===
 def upload_to_firestore(articles, db):
     """Uploads articles to Firestore."""
-    print("\n📤 Uploading articles to Firestore...")
+    print("\nUploading articles to Firestore...")
     
     if not db:
         print("Firestore client not initialized. Saving to local JSON file.")
@@ -406,7 +406,7 @@ def upload_to_firestore(articles, db):
         # Execute the batch
         batch.commit()
     
-    print(f"✅ {len(articles)} articles added to the retrieved_articles collection in Firestore")
+    print(f"{len(articles)} articles added to the retrieved_articles collection in Firestore")
 
 # === MAIN FUNCTION ===
 def main():
@@ -446,7 +446,7 @@ def main():
         category = article.get("category", "Uncategorized")
         categories_count[category] = categories_count.get(category, 0) + 1
     
-    print("\n📊 Distribution of articles by category:")
+    print("\nDistribution of articles by category:")
     for category, count in sorted(categories_count.items(), key=lambda x: x[1], reverse=True):
         print(f"  - {category}: {count} articles")
 
