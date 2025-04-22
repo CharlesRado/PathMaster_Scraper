@@ -13,6 +13,7 @@ from urllib.parse import quote
 # Replace with your real keys or leave as "votre_clé_xxx" for GitHub Actions to replace them
 IEEE_API_KEY = "63mtny26epenxwvge7qvgztk"
 SERP_API_KEY = "ebc6e3a8bfd555e04b902249ec66db5c2b460f322bc831ac3545d0952b4dec98"
+SCOPUS_API_KEY = "6de0f69041bebd0965078c450e00ffb3"
 FIREBASE_JSON = "config/firebase.json"
 
 # -------------------------- FIREBASE INIT --------------------------
@@ -356,187 +357,64 @@ def scrape_google_scholar():
     
     return all_articles
 
-# === MDPI SCRAPER ===
-def scrape_mdpi():
-    """Retrieves articles from MDPI using RSS feeds and web scraping."""
-    print("\nRetrieving articles from MDPI...")
+# === SCOPUS SCRAPER ===
+def scrape_scopus():
+    """Retrieves articles from Scopus using their API."""
+    print("\nRetrieving articles from Scopus...")
     all_articles = []
+        
+    if not SCOPUS_API_KEY:
+        print("⚠️ Scopus API key not configured")
+        return all_articles
     
-    # Try multiple approaches for MDPI
+    # General query for LLM + robotics articles
+    query = quote("LLM AND robotics OR \"large language model\" AND robotics")
+    url = f"https://api.elsevier.com/content/search/scopus?query={query}&apiKey={SCOPUS_API_KEY}&view=COMPLETE"
     
-    # Approach 1: Try MDPI RSS feed for robotics journal
+    headers = {
+        "Accept": "application/json"
+    }
+    
     try:
-        rss_url = "https://www.mdpi.com/rss/journal/robotics"
-        print(f"Trying MDPI RSS feed: {rss_url}")
+        print(f"Scopus Query: {url}")
+        res = requests.get(url, headers=headers)
+        print(f"Scopus Response Code: {res.status_code}")
         
-        res = requests.get(rss_url)
-        if res.status_code == 200:
-            # Parse RSS XML
-            root = ET.fromstring(res.content)
+        if res.status_code != 200:
+            print(f"Scopus API Error: {res.status_code}")
+            print(f"Response: {res.text[:200]}...")
+            return all_articles
             
-            for item in root.findall(".//item"):
-                try:
-                    title_elem = item.find("title")
-                    title = title_elem.text if title_elem is not None else ""
-                    
-                    description_elem = item.find("description")
-                    abstract = description_elem.text if description_elem is not None else ""
-                    
-                    link_elem = item.find("link")
-                    article_url = link_elem.text if link_elem is not None else ""
-                    
-                    # Construct the PDF URL
-                    pdf_url = ""
-                    if article_url:
-                        pdf_url = article_url.replace("/htm", "/pdf")
-                    
-                    # Determine article categories
-                    categories = determine_categories(title, abstract)
-                    
-                    # For robotics journal, if no specific match, assign to Embodied Intelligence
-                    if not categories and ("llm" in title.lower() or "large language model" in title.lower() or 
-                                         "llm" in abstract.lower() or "large language model" in abstract.lower()):
-                        categories = ["General LLM & Robotics"]
-                        
-                    if not categories:
-                        continue  # Skip articles that don't match any category
-                        
-                    for category in categories:
-                        all_articles.append({
-                            "title": title,
-                            "abstract": abstract,
-                            "url": article_url,
-                            "pdf_url": pdf_url,
-                            "category": category,
-                            "website": "MDPI",
-                            "timestamp": datetime.now().isoformat()
-                        })
-                except Exception as e:
-                    print(f"Error processing MDPI RSS item: {e}")
-                    continue
+        data = res.json()
+        results = data.get("search-results", {}).get("entry", [])
+        
+        print(f"Number of Scopus results: {len(results)}")
+        
+        for item in results:
+            title = item.get("dc:title", "")
+            abstract = item.get("dc:description", "")
+            article_url = item.get("prism:url", "")
             
-            print(f"MDPI RSS: {len(all_articles)} articles retrieved")
-            if len(all_articles) > 0:
-                return all_articles
-        else:
-            print(f"MDPI RSS Error: {res.status_code}")
+            # Determine article categories
+            categories = determine_categories(title, abstract)
+            
+            if not categories:
+                categories = ["General LLM & Robotics"]
+                
+            for category in categories:
+                all_articles.append({
+                    "title": title,
+                    "abstract": abstract,
+                    "url": article_url,
+                    "pdf_url": "",  # Scopus doesn't provide direct PDF links
+                    "category": category,
+                    "website": "Scopus",
+                    "timestamp": datetime.now().isoformat()
+                })
+        
+        print(f"Scopus: {len(all_articles)} articles retrieved")
     except Exception as e:
-        print(f"Error retrieving from MDPI RSS: {e}")
-    
-    # Approach 2: Try MDPI web search
-    try:
-        # Import BeautifulSoup for HTML parsing
-        try:
-            from bs4 import BeautifulSoup
-        except ImportError:
-            print("Installing BeautifulSoup...")
-            import subprocess
-            subprocess.check_call(["pip", "install", "beautifulsoup4"])
-            from bs4 import BeautifulSoup
-        
-        search_url = "https://www.mdpi.com/search?q=robotics%20LLM&searchType=Title&searchType=Abstract&searchType=Keywords"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-        
-        print(f"Trying MDPI Web Search: {search_url}")
-        res = requests.get(search_url, headers=headers)
-        print(f"MDPI Web Search Response Code: {res.status_code}")
-        
-        if res.status_code == 200:
-            soup = BeautifulSoup(res.text, 'html.parser')
-            
-            # Try multiple selectors for articles
-            article_selectors = [
-                "div.article-content", 
-                "article", 
-                ".ijms-entry", 
-                ".article-item",
-                ".article"
-            ]
-            
-            for selector in article_selectors:
-                article_elements = soup.select(selector)
-                if article_elements:
-                    print(f"Found {len(article_elements)} articles with selector: {selector}")
-                    break
-            
-            if not article_elements:
-                print("No article elements found in MDPI search results")
-                # Try looking for any article-like structures
-                print("Searching for article-like elements...")
-                potential_articles = soup.find_all(["article", "div"], class_=lambda c: c and ("article" in c.lower()))
-                if potential_articles:
-                    print(f"Found {len(potential_articles)} potential article elements")
-                    article_elements = potential_articles
-                else:
-                    return all_articles
-            
-            for article_elem in article_elements:
-                try:
-                    # Try to find title - multiple possible locations
-                    title_elem = article_elem.select_one("a.title-link, h1, h2")
-                    if not title_elem:
-                        continue
-                    
-                    title = title_elem.text.strip()
-                    # Get URL from link if available
-                    article_url = ""
-                    if title_elem.has_attr('href'):
-                        article_url = title_elem['href']
-                        if not article_url.startswith('http'):
-                            article_url = "https://www.mdpi.com" + article_url
-                    
-                    # Try to find abstract
-                    abstract_elem = article_elem.select_one("div.abstract-full, .abstract, p.abstract")
-                    abstract = abstract_elem.text.strip() if abstract_elem else ""
-                    
-                    # Try to find DOI for PDF URL
-                    pdf_url = ""
-                    doi_elem = article_elem.select_one("div.doi a, .doi a, [data-doi]")
-                    if doi_elem:
-                        if doi_elem.has_attr('href'):
-                            doi_url = doi_elem['href']
-                            doi_parts = doi_url.split('/')
-                            if len(doi_parts) >= 2:
-                                doi = "/".join(doi_parts[-2:])
-                                pdf_url = f"https://www.mdpi.com/pdf/{doi}"
-                        elif doi_elem.has_attr('data-doi'):
-                            doi = doi_elem['data-doi']
-                            pdf_url = f"https://www.mdpi.com/pdf/{doi}"
-                    
-                    # If we found article URL but no PDF URL, try to derive it
-                    if article_url and not pdf_url:
-                        pdf_url = article_url.replace("/htm", "/pdf").replace("/html", "/pdf")
-                    
-                    # Determine article categories
-                    categories = determine_categories(title, abstract)
-                    
-                    if not categories and ("robot" in title.lower() or "robot" in abstract.lower()):
-                        categories = ["General LLM & Robotics"]
-                        
-                    if not categories:
-                        continue  # Skip articles that don't match any category
-                        
-                    for category in categories:
-                        all_articles.append({
-                            "title": title,
-                            "abstract": abstract,
-                            "url": article_url,
-                            "pdf_url": pdf_url,
-                            "category": category,
-                            "website": "MDPI",
-                            "timestamp": datetime.now().isoformat()
-                        })
-                except Exception as e:
-                    print(f"Error processing MDPI article element: {e}")
-                    continue
-            
-            print(f"MDPI Web: {len(all_articles)} articles retrieved")
-        else:
-            print(f"MDPI Web Search Error: {res.status_code}")
-    except Exception as e:
-        print(f"Error retrieving from MDPI web: {e}")
+        print(f"Error retrieving from Scopus: {e}")
         import traceback
         print(traceback.format_exc())
     
@@ -657,17 +535,17 @@ def main():
     arxiv_articles = scrape_arxiv()
     ieee_articles = scrape_ieee()
     scholar_articles = scrape_google_scholar()
-    mdpi_articles = scrape_mdpi()
+    scopus_articles = scrape_scopus()
     
     # Display statistics by source
     print("\nSummary of articles found by source:")
     print(f"  - arXiv: {len(arxiv_articles)} articles")
     print(f"  - IEEE: {len(ieee_articles)} articles")
     print(f"  - Google Scholar: {len(scholar_articles)} articles")
-    print(f"  - MDPI: {len(mdpi_articles)} articles")
+    print(f"  - MDPI: {len(scopus_articles)} articles")
     
     # Combine all articles
-    all_articles = arxiv_articles + ieee_articles + scholar_articles + mdpi_articles
+    all_articles = arxiv_articles + ieee_articles + scholar_articles + scopus_articles
     
     # Clean and deduplicate articles
     unique_articles = clean_and_deduplicate(all_articles)
