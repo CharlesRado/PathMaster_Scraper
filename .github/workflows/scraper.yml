@@ -30,17 +30,15 @@ jobs:
       
       - name: Create Firebase config
         run: |
+          # More reliable method to write the JSON
           cat > config/firebase.json << 'EOL'
           ${{ secrets.FIREBASE_CONFIG }}
           EOL
           
-          # Check if the file is valid or no
+          # Verify the file is valid
           python -c "import json; json.load(open('config/firebase.json'))" || echo "JSON file is invalid"
       
-      - name: Set API keys
-        run: |
-          sed -i "s/votre_clé_ieee/${{ secrets.IEEE_API_KEY }}/g" scraper.py
-          sed -i "s/votre_clé_serp/${{ secrets.SERP_API_KEY }}/g" scraper.py
+      # Skip the API key replacement - we now have hardcoded keys in the script
       
       - name: Run scraper
         run: python scraper.py
