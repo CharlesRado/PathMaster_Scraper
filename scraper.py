@@ -358,6 +358,7 @@ def scrape_google_scholar():
     return all_articles
 
 # === SCOPUS SCRAPER ===
+# === SCOPUS SCRAPER ===
 def scrape_scopus():
     """Retrieves articles from Scopus using their API."""
     print("\nRetrieving articles from Scopus...")
@@ -369,10 +370,14 @@ def scrape_scopus():
     
     # General query for LLM + robotics articles
     query = quote("LLM AND robotics OR \"large language model\" AND robotics")
-    url = f"https://api.elsevier.com/content/search/scopus?query={query}&apiKey={SCOPUS_API_KEY}&view=COMPLETE"
     
+    # Updated URL with correct parameters and simplified query
+    url = f"https://api.elsevier.com/content/search/scopus?query={query}&apiKey={SCOPUS_API_KEY}"
+    
+    # Updated headers with Institutional Token
     headers = {
-        "Accept": "application/json"
+        "Accept": "application/json",
+        "X-ELS-APIKey": SCOPUS_API_KEY
     }
     
     try:
@@ -383,8 +388,84 @@ def scrape_scopus():
         if res.status_code != 200:
             print(f"Scopus API Error: {res.status_code}")
             print(f"Response: {res.text[:200]}...")
+            
+            # Try alternative approach with simplified query
+            print("Trying alternative Scopus approach...")
+            
+            alt_query = quote("robotics")
+            alt_url = f"https://api.elsevier.com/content/search/scopus?query={alt_query}&apiKey={SCOPUS_API_KEY}"
+            
+            alt_res = requests.get(alt_url, headers=headers)
+            print(f"Scopus Alternative Response Code: {alt_res.status_code}")
+            
+            if alt_res.status_code != 200:
+                print(f"Scopus Alternative API Error: {alt_res.status_code}")
+                print(f"Response: {alt_res.text[:200]}...")
+                return all_articles
+                
+            data = alt_res.json()
+            
+            # Handle potential differences in JSON structure
+            if "search-results" not in data:
+                print(f"Unexpected Scopus response format: {list(data.keys())}")
+                return all_articles
+                
+            results = data.get("search-results", {}).get("entry", [])
+            
+            if not results:
+                print("No results found in Scopus alternative response")
+                return all_articles
+                
+            print(f"Number of Scopus alternative results: {len(results)}")
+            
+            for item in results:
+                try:
+                    title = item.get("dc:title", "")
+                    
+                    # Abstract might be in different fields
+                    abstract = item.get("dc:description", "")
+                    if not abstract:
+                        abstract = item.get("abstract", "")
+                    
+                    # URL might be in different fields
+                    article_url = item.get("prism:url", "")
+                    if not article_url:
+                        article_url = item.get("link", [])
+                        if isinstance(article_url, list):
+                            for link in article_url:
+                                if link.get("@ref") == "scopus":
+                                    article_url = link.get("@href", "")
+                                    break
+                    
+                    # Only include articles that mention LLM or language models
+                    combined_text = (title + " " + abstract).lower()
+                    if "llm" not in combined_text and "language model" not in combined_text:
+                        continue
+                    
+                    # Determine article categories
+                    categories = determine_categories(title, abstract)
+                    
+                    if not categories:
+                        categories = ["General LLM & Robotics"]
+                        
+                    for category in categories:
+                        all_articles.append({
+                            "title": title,
+                            "abstract": abstract,
+                            "url": article_url,
+                            "pdf_url": "",  # Scopus doesn't provide direct PDF links
+                            "category": category,
+                            "website": "Scopus",
+                            "timestamp": datetime.now().isoformat()
+                        })
+                except Exception as e:
+                    print(f"Error processing Scopus result: {e}")
+                    continue
+            
+            print(f"Scopus (alternative): {len(all_articles)} articles retrieved")
             return all_articles
             
+        # Process original successful response
         data = res.json()
         results = data.get("search-results", {}).get("entry", [])
         
