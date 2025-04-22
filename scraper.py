@@ -153,7 +153,7 @@ def scrape_arxiv():
         
         print(f"arXiv: {len(all_articles)} articles retrieved")
     except Exception as e:
-        print(f"Error retrieving from arXiv: {e}")
+        print(f"Error retrieving from arXiv: {e}") 
     
     return all_articles
 
@@ -540,9 +540,9 @@ def main():
     # Display statistics by source
     print("\nSummary of articles found by source:")
     print(f"  - arXiv: {len(arxiv_articles)} articles")
-    print(f"  - IEEE: {len(ieee_articles)} articles")
+    print(f"  - IEEE Xplore: {len(ieee_articles)} articles")
     print(f"  - Google Scholar: {len(scholar_articles)} articles")
-    print(f"  - MDPI: {len(scopus_articles)} articles")
+    print(f"  - Scopus: {len(scopus_articles)} articles")
     
     # Combine all articles
     all_articles = arxiv_articles + ieee_articles + scholar_articles + scopus_articles
